@@ -107,10 +107,10 @@ step l2stop: UNLISTEN *;
 starting permutation: llisten lbegin usage bignotify usage
 step llisten: LISTEN c1; LISTEN c2;
 step lbegin: BEGIN;
-step usage: SELECT pg_notification_queue_usage() > 0 AS nonzero;
+step usage: SELECT pg_notification_queue_usage() = 0 AS nonzero;
 nonzero
 -------
-f      
+t      
 (1 row)
 
 step bignotify: SELECT count(pg_notify('c1', s::text)) FROM generate_series(1, 1000) s;
@@ -119,7 +119,7 @@ count
  1000
 (1 row)
 
-step usage: SELECT pg_notification_queue_usage() > 0 AS nonzero;
+step usage: SELECT pg_notification_queue_usage() = 0 AS nonzero;
 nonzero
 -------
 t      

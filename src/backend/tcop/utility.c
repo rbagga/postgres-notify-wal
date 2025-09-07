@@ -325,18 +325,17 @@ ClassifyUtilityCommandAsReadOnly(Node *parsetree)
 			}
 
 		case T_ListenStmt:
-		case T_NotifyStmt:
 			{
 				/*
-				 * NOTIFY requires an XID assignment, so it can't be permitted
-				 * on a standby. Perhaps LISTEN could, since without NOTIFY it
-				 * would be OK to just do nothing, at least until promotion,
-				 * but we currently prohibit it lest the user get the wrong
-				 * idea.
-				 *
-				 * (We do allow T_UnlistenStmt on a standby, though, because
-				 * it's a no-op.)
+				 * Allow LISTEN during recovery. With WAL-based notifications,
+				 * standbys can subscribe and receive NOTIFYs from WAL replay.
 				 */
+				return COMMAND_OK_IN_RECOVERY | COMMAND_OK_IN_READ_ONLY_TXN;
+			}
+
+		case T_NotifyStmt:
+			{
+				/* NOTIFY still requires an XID; disallow during recovery. */
 				return COMMAND_OK_IN_READ_ONLY_TXN;
 			}
 

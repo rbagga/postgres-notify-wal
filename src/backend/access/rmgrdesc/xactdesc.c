@@ -135,6 +135,19 @@ ParseCommitRecord(uint8 info, xl_xact_commit *xlrec, xl_xact_parsed_commit *pars
 
 		data += sizeof(xl_xact_origin);
 	}
+
+	if (parsed->xinfo & XACT_XINFO_HAS_NOTIFY)
+	{
+		xl_xact_notify xl_notify;
+
+		/* no alignment is guaranteed, so copy onto stack */
+		memcpy(&xl_notify, data, sizeof(xl_notify));
+
+		parsed->notify_lsn = xl_notify.notify_lsn;
+
+		data += sizeof(xl_xact_notify);
+	}
+
 }
 
 void
