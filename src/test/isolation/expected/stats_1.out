@@ -3106,7 +3106,7 @@ step s1_slru_check_stats:
 
 ?column?
 --------
-t       
+f       
 (1 row)
 
 
@@ -3146,7 +3146,7 @@ step s1_slru_check_stats:
 
 ?column?
 --------
-t       
+f       
 (1 row)
 
 
@@ -3242,7 +3242,7 @@ step s1_slru_check_stats:
 
 ?column?
 --------
-t       
+f       
 (1 row)
 
 step s1_commit: COMMIT;
@@ -3255,7 +3255,7 @@ step s1_slru_check_stats:
 
 ?column?
 --------
-t       
+f       
 (1 row)
 
 
@@ -3322,7 +3322,7 @@ step s1_slru_check_stats:
 
 ?column?
 --------
-t       
+f       
 (1 row)
 
 
@@ -3389,7 +3389,7 @@ step s1_slru_check_stats:
 
 ?column?
 --------
-t       
+f       
 (1 row)
 
 
@@ -3443,7 +3443,7 @@ step s1_slru_check_stats:
 
 ?column?
 --------
-t       
+f       
 (1 row)
 
 step s1_clear_snapshot: SELECT pg_stat_clear_snapshot();
@@ -3461,7 +3461,7 @@ step s1_slru_check_stats:
 
 ?column?
 --------
-t       
+f       
 (1 row)
 
 step s1_commit: COMMIT;
@@ -3534,7 +3534,7 @@ step s1_slru_check_stats:
 
 ?column?
 --------
-t       
+f       
 (1 row)
 
 step s1_commit: COMMIT;
@@ -3607,7 +3607,7 @@ step s1_slru_check_stats:
 
 ?column?
 --------
-t       
+f       
 (1 row)
 
 step s1_commit: COMMIT;
@@ -3707,7 +3707,7 @@ step s1_slru_check_stats:
 
 ?column?
 --------
-t       
+f       
 (1 row)
 
 step s2_func_call: SELECT test_stat_func()

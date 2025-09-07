@@ -14,10 +14,24 @@
 #define ASYNC_H
 
 #include <signal.h>
+#include "access/xlogreader.h"
+#include "lib/stringinfo.h"
 
 extern PGDLLIMPORT bool Trace_notify;
 extern PGDLLIMPORT int max_notify_queue_pages;
 extern PGDLLIMPORT volatile sig_atomic_t notifyInterruptPending;
+
+/*
+ * Compact SLRU queue entry - stores metadata pointing to WAL data
+ */
+typedef struct AsyncQueueEntry
+{
+	Oid			dboid;			/* database ID for quick filtering */
+	TransactionId	xid;			/* transaction ID */
+	XLogRecPtr	notify_lsn;		/* LSN of notification data in WAL */
+} AsyncQueueEntry;
+
+#define ASYNC_QUEUE_ENTRY_SIZE	sizeof(AsyncQueueEntry)
 
 extern Size AsyncShmemSize(void);
 extern void AsyncShmemInit(void);
@@ -45,5 +59,18 @@ extern void HandleNotifyInterrupt(void);
 
 /* process interrupts */
 extern void ProcessNotifyInterrupt(bool flush);
+
+/* WAL-based notification functions */
+extern XLogRecPtr LogAsyncNotifyData(Oid dboid, TransactionId xid, int32 srcPid,
+									 uint32 nnotifications, Size data_len, char *data);
+extern void async_redo(XLogReaderState *record);
+extern void async_desc(StringInfo buf, XLogReaderState *record);
+extern const char *async_identify(uint8 info);
+
+/* notification queue functions */
+extern void asyncQueueAddCompactEntry(Oid dbid, TransactionId xid, XLogRecPtr notify_lsn);
+
+/* Spill helper to be called before WAL recycle */
+extern bool AsyncNotifyOldestRequiredLSN(XLogRecPtr *oldest_lsn);
 
 #endif							/* ASYNC_H */

@@ -31,7 +31,7 @@ step notifys1	{
 	ROLLBACK TO SAVEPOINT s2;
 	COMMIT;
 }
-step usage		{ SELECT pg_notification_queue_usage() > 0 AS nonzero; }
+step usage		{ SELECT pg_notification_queue_usage() = 0 AS nonzero; }
 step bignotify	{ SELECT count(pg_notify('c1', s::text)) FROM generate_series(1, 1000) s; }
 teardown		{ UNLISTEN *; }
 

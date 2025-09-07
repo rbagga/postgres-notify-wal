@@ -54,6 +54,7 @@
 #include "access/subtrans.h"
 #include "access/timeline.h"
 #include "access/transam.h"
+#include "commands/async.h"
 #include "access/twophase.h"
 #include "access/xact.h"
 #include "access/xlog_internal.h"
@@ -3876,7 +3877,7 @@ RemoveTempXlogFiles(void)
  */
 static void
 RemoveOldXlogFiles(XLogSegNo segno, XLogRecPtr lastredoptr, XLogRecPtr endptr,
-				   TimeLineID insertTLI)
+		TimeLineID insertTLI)
 {
 	DIR		   *xldir;
 	struct dirent *xlde;
@@ -3897,6 +3898,47 @@ RemoveOldXlogFiles(XLogSegNo segno, XLogRecPtr lastredoptr, XLogRecPtr endptr,
 
 	elog(DEBUG2, "attempting to remove WAL segments older than log file %s",
 		 lastoff);
+
+	/*
+	 * Pin WAL needed by NOTIFY delivery: adjust segno so that we do not
+	 * remove segments older than the one containing the oldest NOTIFY entry
+	 * still present in the queue. This prevents recycling WAL that listeners
+	 * may still need to read NOTIFY payloads from.
+	 */
+	{
+		XLogRecPtr notify_oldest;
+		if (AsyncNotifyOldestRequiredLSN(&notify_oldest))
+		{
+			XLogSegNo notifySegNo;
+			/* Segment containing the oldest required LSN */
+			XLByteToSeg(notify_oldest, notifySegNo, wal_segment_size);
+			if (Trace_notify)
+				elog(DEBUG1, "async notify: checking WAL pin; oldest notify LSN %X/%X (seg %lu)",
+					 LSN_FORMAT_ARGS(notify_oldest), (unsigned long) notifySegNo);
+			/*
+			 * Last removable must be strictly before notifySegNo. If
+			 * notifySegNo == 0, there is no valid "previous" segment, so do
+			 * not reduce segno at all in that case.
+			 */
+			if (notifySegNo > 0)
+			{
+				XLogSegNo cutoff = notifySegNo - 1;
+				if (cutoff < segno)
+				{
+					segno = cutoff;
+					if (Trace_notify)
+					{
+						XLogFileName(lastoff, 0, segno, wal_segment_size);
+						elog(DEBUG1, "async notify: WAL recycle cutoff adjusted to segno %lu (lastoff %s)",
+							 (unsigned long) segno, lastoff);
+					}
+				}
+			}
+		}
+	}
+
+	/* Recompute cutoff filename after any segno adjustment above */
+	XLogFileName(lastoff, 0, segno, wal_segment_size);
 
 	xldir = AllocateDir(XLOGDIR);
 

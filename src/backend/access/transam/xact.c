@@ -5841,9 +5841,23 @@ XactLogCommitRecord(TimestampTz commit_time,
 	xl_xact_invals xl_invals;
 	xl_xact_twophase xl_twophase;
 	xl_xact_origin xl_origin;
+	xl_xact_notify xl_notify;
 	uint8		info;
+	XLogRecPtr	result;
 
 	Assert(CritSectionCount > 0);
+
+	/*
+	 * Handle notification commit ordering: if this transaction has pending
+	 * notifications, we must write the queue entry just before the commit
+	 * record while holding NotifyQueueLock to ensure proper ordering.
+	 */
+	if (!XLogRecPtrIsInvalid(MyProc->notifyCommitLsn))
+	{
+		TransactionId xid = GetCurrentTransactionId();
+		LWLockAcquire(NotifyQueueLock, LW_EXCLUSIVE);
+		asyncQueueAddCompactEntry(MyDatabaseId, xid, MyProc->notifyCommitLsn);
+	}
 
 	xl_xinfo.xinfo = 0;
 
@@ -5926,6 +5940,13 @@ XactLogCommitRecord(TimestampTz commit_time,
 		xl_origin.origin_timestamp = replorigin_session_origin_timestamp;
 	}
 
+	/* include notification information if present */
+	if (!XLogRecPtrIsInvalid(MyProc->notifyCommitLsn))
+	{
+		xl_xinfo.xinfo |= XACT_XINFO_HAS_NOTIFY;
+		xl_notify.notify_lsn = MyProc->notifyCommitLsn;
+	}
+
 	if (xl_xinfo.xinfo != 0)
 		info |= XLOG_XACT_HAS_INFO;
 
@@ -5982,10 +6003,25 @@ XactLogCommitRecord(TimestampTz commit_time,
 	if (xl_xinfo.xinfo & XACT_XINFO_HAS_ORIGIN)
 		XLogRegisterData(&xl_origin, sizeof(xl_xact_origin));
 
+	if (xl_xinfo.xinfo & XACT_XINFO_HAS_NOTIFY)
+		XLogRegisterData(&xl_notify, sizeof(xl_xact_notify));
+
 	/* we allow filtering by xacts */
 	XLogSetRecordFlags(XLOG_INCLUDE_ORIGIN);
 
-	return XLogInsert(RM_XACT_ID, info);
+	/* Insert the commit record */
+	result = XLogInsert(RM_XACT_ID, info);
+
+	/*
+	 * Release NotifyQueueLock if we held it. The queue entry is now
+	 * associated with a committed transaction, so readers can process it.
+	 */
+	if (!XLogRecPtrIsInvalid(MyProc->notifyCommitLsn))
+	{
+		LWLockRelease(NotifyQueueLock);
+	}
+
+	return result;
 }
 
 /*
@@ -6225,6 +6261,12 @@ xact_redo_commit(xl_xact_parsed_commit *parsed,
 		/* recover apply progress */
 		replorigin_advance(origin_id, parsed->origin_lsn, lsn,
 						   false /* backward */ , false /* WAL */ );
+	}
+
+	/* Add notification queue entry if this commit has notifications */
+	if (parsed->xinfo & XACT_XINFO_HAS_NOTIFY)
+	{
+		asyncQueueAddCompactEntry(parsed->dbId, xid, parsed->notify_lsn);
 	}
 
 	/* Make sure files supposed to be dropped are dropped */
